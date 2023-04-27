@@ -1,0 +1,611 @@
+---
+title: "Report Project MRR 2022 - Ocean - Binomial 18"
+output:
+  pdf_document: default
+  html_document: default
+date: "2022-11-14"
+---
+
+Do Thanh Dat LE
+
+Gan WANG
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+rm(list = ls())
+```
+
+```{r}
+library(readxl)
+library(reshape2)
+library(ggplot2)
+```
+
+# Read data
+
+```{r}
+Vect = read_excel("Vect.xlsx")
+depth = read_excel("depth.xlsx")
+names(Vect) = gsub("'","", names(Vect))
+```
+
+# Draw histogram of all CHL
+
+```{r}
+# histogram before tranform
+ggplot(melt(Vect[,c(23:40)]),aes(x = value),) + 
+  facet_wrap(~variable,scales = "free_x") + 
+  geom_histogram() + ggtitle("Histogram of all CHL") 
+# histogram after transform to log10CHL
+ggplot(melt(log10(Vect[,c(23:40)])),aes(x = value)) + 
+  facet_wrap(~variable,scales = "free_x") + 
+  geom_histogram()
+```
+
+# Transform the CHL to log10CHL
+
+```{r}
+# Transform the CHL to log10CHL
+Vect$log10CHL2 = log10(Vect$`CHL 2`)
+Vect$log10CHL3 = log10(Vect$`CHL 3`)
+Vect$log10CHL4 = log10(Vect$`CHL 4`)
+Vect$log10CHL5 = log10(Vect$`CHL 5`)
+Vect$log10CHL6 = log10(Vect$`CHL 6`)
+Vect$log10CHL7 = log10(Vect$`CHL 7`)
+Vect$log10CHL8 = log10(Vect$`CHL 8`)
+Vect$log10CHL9 = log10(Vect$`CHL 9`)
+Vect$log10CHL10 = log10(Vect$`CHL 10`)
+Vect$log10CHL11 = log10(Vect$`CHL 11`)
+Vect$log10CHL12 = log10(Vect$`CHL 12`)
+Vect$log10CHL13 = log10(Vect$`CHL 13`)
+Vect$log10CHL14 = log10(Vect$`CHL 14`)
+Vect$log10CHL15 = log10(Vect$`CHL 15`)
+Vect$log10CHL16 = log10(Vect$`CHL 16`)
+Vect$log10CHL17 = log10(Vect$`CHL 17`)
+Vect$log10CHL18 = log10(Vect$`CHL 18`)
+```
+
+# Create the BATS data
+
+```{r}
+bats = Vect[(Vect$longitude>=-65)&(Vect$longitude<=-63)&(Vect$latitude>=31)&(Vect$latitude<=33),]
+bats_data = bats[,-c(6:22, 24:40, 43:44)]
+bats_data$sin.5days = sin(2*pi*(bats_data$`5days`/73))
+bats_data$cos.5days= cos(2*pi*(bats_data$`5days`/73))
+bats_data = bats_data[,-c(7)]
+sin.5days = bats_data$sin.5days
+cos.5days = bats_data$cos.5days
+year = bats_data$year
+log10CHL = bats_data[,c(8:24)] #extract 17 CHLs for 17 depths
+```
+
+# Create the spatial data
+
+```{r}
+df = Vect[,-c(6:22, 24:42, 45:61)]
+for (i in 1:9) {
+  location = df[(df$latitude == df$latitude[i])&(df$longitude == df$longitude[i]),]
+  if ((location$latitude[1] == bats$latitude[1]) & (location$longitude[1] == bats$longitude[1])) {
+    names(location) = paste(names(location),"_BATS")
+  } else {
+    names(location) = paste(names(location),"_",i)
+  }
+  location = location[, -c(7:8)]
+  if (i==1) {
+    spatial_data = cbind(location)
+  } else {
+    spatial_data = cbind(spatial_data, location) 
+  }
+}
+
+spatial_data = cbind(spatial_data, sin.5days, cos.5days, year, log10CHL)
+```
+
+# Create the temporal data
+
+```{r}
+# create NA data for new variable
+before.5days = data.frame(matrix(data = NA, nrow = 1241, ncol = ncol(bats_data[,-c(7:26)])))
+before.10days = data.frame(matrix(data = NA, nrow = 1241, ncol = ncol(bats_data[,-c(7:26)])))
+after.5days = data.frame(matrix(data = NA, nrow = 1241, ncol = ncol(bats_data[,-c(7:26)])))
+after.10days = data.frame(matrix(data = NA, nrow = 1241, ncol = ncol(bats_data[,-c(7:26)])))
+# name the variables
+names(before.5days) = paste(names(bats_data[,-c(7:26)]),".before.5days")
+names(before.10days) = paste(names(bats_data[,-c(7:26)]),".before.10days")
+names(after.5days) = paste(names(bats_data[,-c(7:26)]),".after.5days")
+names(after.10days) = paste(names(bats_data[,-c(7:26)]),".after.10days")
+# create temporal data
+for (i in 18:(nrow(bats_data))) {
+  before.5days[i,] = bats_data[i-17,-c(7:26)]
+  before.10days[i,] = before.5days[i-17,]
+  after.5days[i-17,] = bats_data[i,-c(7:26)]
+  after.10days[i-17,] = bats_data[i+17,-c(7:26)]
+}
+temporal_data = cbind(bats_data, before.5days, before.10days, after.5days, after.10days)
+temporal_data = na.omit(temporal_data)
+```
+
+#Correlation
+
+```{r}
+cordata1 = cor(bats_data)
+cordata2 = cor(spatial_data)
+cordata3 = cor(temporal_data)
+corrplot::corrplot(cordata1, method ="circle", tl.cex = 0.5)
+corrplot::corrplot(cordata2, method ="circle", tl.cex = 0.5)
+corrplot::corrplot(cordata3, method ="circle", tl.cex = 0.5)
+```
+
+# Split the data into training set, test set and validation set
+
+## BATS data
+
+```{r}
+# sort data by year
+bats_data = bats_data[order(bats_data$year),]
+train_ind = as.integer((nrow(bats_data)*11)/17)
+bats_train = bats_data[1:train_ind,]
+pseudo = bats_data[(train_ind + 1):nrow(bats_data),]
+test_id = as.integer(nrow(pseudo)/2)
+bats_test = pseudo[1:test_id,]
+bats_valid = pseudo[(test_id+1):nrow(pseudo),]
+```
+
+## Spatial data
+
+```{r}
+spatial_data = spatial_data[order(spatial_data$year),]
+train_ind = as.integer((nrow(spatial_data)*11)/17)
+spatial_train = spatial_data[1:train_ind,]
+pseudo = spatial_data[(train_ind + 1):nrow(spatial_data),]
+test_id = as.integer(nrow(pseudo)/2)
+spatial_test = pseudo[1:test_id,]
+spatial_valid = pseudo[(test_id+1):nrow(pseudo),]
+```
+
+## Temporal Data
+
+```{r}
+temporal_data = temporal_data[order(temporal_data$year),]
+train_ind = as.integer((nrow(temporal_data)*11)/17)
+temporal_train = temporal_data[1:train_ind,]
+pseudo = temporal_data[(train_ind + 1):nrow(temporal_data),]
+test_id = as.integer(nrow(pseudo)/2)
+temporal_test = pseudo[1:test_id,]
+temporal_valid = pseudo[(test_id+1):nrow(pseudo),]
+```
+
+# Build model to predict CHL4
+
+## Model 1: Linear regression model with stepwise on BATS data
+
+```{r}
+#BASELINE MODEL
+reg.bats = lm(log10CHL4~., data = bats_train[,-c(7:9,11:24)])
+summary(reg.bats)
+#STEPWISE
+regstep.bats = step(reg.bats, direction = "both", trace = 0)
+summary(regstep.bats)
+#Predict on the test set and compute RMSE
+bats_pred = predict(regstep.bats, newdata = bats_test[,-c(7:24)])
+rmse_bats.reg = sqrt(mean((10^(bats_pred)-10^(bats_test$log10CHL4))^2))
+rmse_bats.reg
+plot(10^(bats_pred), 10^(bats_test$log10CHL4), xlab = "Predicted CHL4", ylab = "CHL 4")
+abline(a = 0, b = 1, col = "red")
+```
+
+## Model 2: Lasso regression model (L1) on BATS data
+
+```{r}
+#LASSO MODEL
+library(glmnet)
+X = as.matrix(bats_train[,-c(7:24)])
+Y = as.matrix(bats_train$log10CHL4)
+lasso.mod = cv.glmnet(X, Y, alpha = 1, lambda = seq(0, 10, 0.01), nfolds = 10)
+plot(lasso.mod)
+plot(lasso.mod$glmnet.fit, "lambda", label = T)
+lambda.lasso = lasso.mod$lambda.min
+lasso.bats = glmnet(X, Y, alpha = 1, lambda = lambda.lasso)
+coef(lasso.bats)
+# Predict and compute MRSE
+bats_pred_train = predict(lasso.bats, as.matrix(bats_train[,-c(7:24)]))
+bats_pred.lasso = predict(lasso.bats, as.matrix(bats_test[,-c(7:24)]))
+rmse_bats.lasso = sqrt(mean((10^(bats_pred.lasso)-10^(bats_test$log10CHL4))^2))
+rmse_bats.lasso
+R_squared.lasso = (sd(bats_pred_train))^2/(sd(bats_train$log10CHL4))^2
+R_squared.lasso
+adj_R.lasso = 1-(1-R_squared.lasso)*((nrow(bats_train)-1)/(nrow(bats_train)-8))
+adj_R.lasso
+plot(10^(bats_pred.lasso), 10^(bats_test$log10CHL4), xlab = "Predicted CHL4", ylab = "CHL 4")
+abline(a = 0, b = 1, col = "red")
+```
+
+## Model 3: Ridge regression model (L2) on BATS data
+
+```{r}
+#Ridge model 
+library(MASS)
+ridge.mod = lm.ridge(log10CHL4~., bats_train[,-c(7:9,11:24)], lambda = seq(0,10,0.01))
+plot(ridge.mod)
+plot(ridge.mod$GCV)
+best.lambda = as.numeric(names(which.min(ridge.mod$GCV)))
+ridge.bats = lm.ridge(log10CHL4~., bats_train[,-c(7:9,11:24)], lambda = best.lambda)
+coef(ridge.bats)
+#Predict and compute RMSE, R^2 and adjusted R^2
+bats_pred_train = as.matrix(cbind(rep(1,nrow(bats_train)),bats_train[,-c(7:24)]))%*%as.vector(coef(ridge.bats))
+bats_pred.ridge = as.matrix(cbind(rep(1,nrow(bats_test)),bats_test[,-c(7:24)]))%*%as.vector(coef(ridge.bats))
+rmse_bats.ridge = sqrt(mean((10^(bats_pred.ridge)-10^(bats_test$log10CHL4))^2))
+rmse_bats.ridge
+R_squared.ridge = (sd(bats_pred_train))^2/(sd(bats_train$log10CHL4))^2
+R_squared.ridge
+adj_R.ridge = 1-(1-R_squared.ridge)*((nrow(bats_train)-1)/(nrow(bats_train)-8))
+adj_R.ridge
+plot(10^(bats_pred.ridge), 10^(bats_test$log10CHL4), xlab = "Predicted CHL4", ylab = "CHL 4")
+abline(a = 0, b = 1, col = "red")
+```
+
+## Model 4: Linear regression with spatial data
+
+```{r}
+#BASELINE MODEL
+reg.spatial = lm(log10CHL4~., data = spatial_train[,-c(57:59, 61:74)])
+summary(reg.spatial)
+#STEPWISE
+regstep.spatial = step(reg.spatial, direction = "both", trace = 0)
+summary(regstep.spatial)
+#Predict and compute RMSE
+spatial_pred = predict(regstep.spatial, newdata = spatial_test[,-c(57:74)])
+rmse_spatial.reg = sqrt(mean((10^(spatial_pred)-10^(spatial_test$log10CHL4))^2))
+rmse_spatial.reg
+plot(10^(spatial_pred), 10^(spatial_test$log10CHL4), xlab = "Predicted CHL4", ylab = "CHL 4")
+abline(a = 0, b = 1, col = "red")
+```
+
+## Model 5: Linear regression with temporal data
+
+```{r}
+#BASELINE MODEL
+reg.temporal = lm(log10CHL4~., data = temporal_train[,-c(7:9, 11:24)])
+summary(reg.temporal)
+#STEPWISE
+regstep.temporal = step(reg.temporal, direction = "both", trace = 0)
+summary(regstep.temporal)
+#Predict and compute RMSE
+temporal_pred = predict(regstep.temporal, newdata = temporal_test[,-c(7:24)])
+rmse_temporal.reg = sqrt(mean((10^(temporal_pred)-10^(temporal_test$log10CHL4))^2))
+rmse_temporal.reg
+plot(10^(temporal_pred), 10^(temporal_test$log10CHL4), xlab = "Predicted CHL4", ylab = "CHL 4")
+abline(a = 0, b = 1, col = "red")
+```
+
+## Model 6: Lasso regression with spatial data
+
+```{r}
+#LASSO MODEL
+library(glmnet)
+X = as.matrix(spatial_train[,-c(57:74)])
+Y = as.matrix(spatial_train$log10CHL4)
+lasso.mod = cv.glmnet(X, Y, alpha = 1, lambda = seq(0, 10, 0.01), nfolds = 10)
+plot(lasso.mod)
+plot(lasso.mod$glmnet.fit, "lambda", label = T)
+lambda.lasso = lasso.mod$lambda.min
+lasso.spatial = glmnet(X, Y, alpha = 1, lambda = lambda.lasso)
+coef(lasso.spatial)
+# Predict and compute MRSE
+spatial_pred = predict(lasso.spatial, as.matrix(spatial_train[,-c(57:74)]))
+spatial_pred.lasso = predict(lasso.spatial, as.matrix(spatial_test[,-c(57:74)]))
+rmse_spatial.lasso = sqrt(mean((10^(spatial_pred.lasso)-10^(spatial_test$log10CHL4))^2))
+rmse_spatial.lasso
+R_squared.lasso = (sd(spatial_pred))^2/(sd(spatial_train$log10CHL4))^2
+R_squared.lasso
+adj_R.lasso = 1-(1-R_squared.lasso)*((nrow(spatial_train)-1)/(nrow(spatial_train)-56))
+adj_R.lasso
+plot(10^(spatial_pred.lasso), 10^(spatial_test$log10CHL4), xlab = "Predicted CHL4", ylab = "CHL 4")
+abline(a = 0, b = 1, col = "red")
+```
+
+## Model 7: Ridge regression with spatial data
+
+```{r}
+#Ridge model 
+library(MASS)
+ridge.mod = lm.ridge(log10CHL4~., spatial_train[, -c(57:59, 61:74)], lambda = seq(0,10,0.01))
+plot(ridge.mod)
+best.lambda = as.numeric(names(which.min(ridge.mod$GCV)))
+ridge.spatial = lm.ridge(log10CHL4~., spatial_train[, -c(57:59, 61:74)], lambda = best.lambda)
+coef(ridge.spatial)
+#Predict and compute RMSE
+spar_pred = as.matrix(cbind(rep(1,nrow(spatial_train)),spatial_train[,-c(57:74)]))%*%as.vector(coef(ridge.spatial))
+spatial_pred.ridge = as.matrix(cbind(rep(1,nrow(spatial_test)),spatial_test[,-c(57:74)]))%*%as.vector(coef(ridge.spatial))
+rmse_spatial.ridge = sqrt(mean((10^(spatial_pred.ridge)-10^(spatial_test$log10CHL4))^2))
+rmse_spatial.ridge
+R_squared.ridge = (sd(spar_pred))^2/(sd(spatial_train$log10CHL4))^2
+R_squared.ridge
+adj_R.ridge = 1-(1-R_squared.ridge)*((nrow(spatial_train)-1)/(nrow(spatial_train)-56))
+adj_R.ridge
+plot(10^(spatial_pred.ridge), 10^(spatial_test$log10CHL4), xlab = "Predicted CHL4", ylab = "CHL 4")
+abline(a = 0, b = 1, col = "red")
+```
+
+## Model 8: Lasso regression with temporal data
+
+```{r}
+#LASSO MODEL
+X = as.matrix(temporal_train[,-c(7:24)])
+Y = as.matrix(temporal_train$log10CHL4)
+lasso.mod = cv.glmnet(X, Y, alpha = 1, lambda = seq(0, 10, 0.01), nfolds = 10)
+plot(lasso.mod)
+plot(lasso.mod$glmnet.fit, "lambda", label = T)
+lambda.lasso = lasso.mod$lambda.min
+lasso.temporal = glmnet(X, Y, alpha = 1, lambda = lambda.lasso)
+coef(lasso.temporal)
+# Predict and compute MRSE
+tem_pred = predict(lasso.temporal, as.matrix(temporal_train[,-c(7:24)]))
+temporal_pred.lasso = predict(lasso.temporal, as.matrix(temporal_test[,-c(7:24)]))
+rmse_temporal.lasso = sqrt(mean((10^(temporal_pred.lasso)-10^(temporal_test$log10CHL4))^2))
+rmse_temporal.lasso
+R_squared.lasso = (sd(tem_pred))^2/(sd(temporal_train$log10CHL4))^2
+R_squared.lasso
+adj_R.lasso = 1-(1-R_squared.lasso)*((nrow(temporal_train)-1)/(nrow(temporal_train)-32))
+adj_R.lasso
+plot(10^(temporal_pred.lasso), 10^(temporal_test$log10CHL4), xlab = "Predicted CHL4", ylab = "CHL 4")
+abline(a = 0, b = 1, col = "red")
+```
+
+## Model 9: Ridge regression with temporal data
+
+```{r}
+library(MASS)
+ridge.mod = lm.ridge(log10CHL4~., temporal_train[,-c(7:9, 11:24)], lambda = seq(0,10,0.01))
+plot(ridge.mod)
+best.lambda = as.numeric(names(which.min(ridge.mod$GCV)))
+ridge.temporal = lm.ridge(log10CHL4~., temporal_train[,-c(7:9, 11:24)], lambda = best.lambda)
+coef(ridge.temporal)
+#Predict and compute RMSE
+tem_pred = as.matrix(cbind(rep(1,nrow(temporal_train)),temporal_train[,-c(7:24)]))%*%as.vector(coef(ridge.temporal))
+temporal_pred.ridge = as.matrix(cbind(rep(1,nrow(temporal_test)),temporal_test[,-c(7:24)]))%*%as.vector(coef(ridge.temporal))
+rmse_temporal.ridge = sqrt(mean((10^(temporal_pred.ridge)-10^(temporal_test$log10CHL4))^2))
+rmse_temporal.ridge
+R_squared.ridge = (sd(tem_pred))^2/(sd(temporal_train$log10CHL4))^2
+R_squared.ridge
+adj_R.ridge = 1-(1-R_squared.ridge)*((nrow(temporal_train)-1)/(nrow(temporal_train)-32))
+adj_R.ridge
+plot(10^(temporal_pred.ridge), 10^(temporal_test$log10CHL4), xlab = "Predicted CHL4", ylab = "CHL 4")
+abline(a = 0, b = 1, col = "red")
+```
+
+## Model 10: KNN regression with BATS data
+
+```{r}
+#KNN regression
+library(caret)
+knn.bats = knnreg(bats_train[,-c(7:24)], bats_train$log10CHL4)
+bats_pred = predict(knn.bats, bats_train[,-c(7:24)])
+bats_pred.knn = predict(knn.bats, bats_test[,-c(7:24)])
+rmse_bats.knn = sqrt(mean((10^(bats_pred.knn)-10^(bats_test$log10CHL4))^2))
+R_squared.knn = (sd(bats_pred))^2/(sd(bats_train$log10CHL4))^2
+R_squared.knn
+adj_R.knn = 1-(1-R_squared.knn)*((nrow(bats_train)-1)/(nrow(bats_train)-8))
+adj_R.knn
+cat("RMSE: ", rmse_bats.knn, "R-squared: ", R_squared.knn)
+x = 1:nrow(bats_test)
+plot(x,10^(bats_test$log10CHL4), col = 'red', type = 'l', lwd = 2, main = 'CHL 4 prediction', xlab = "Index", ylab = "Predicted CHL 4")
+lines(x, 10^(bats_pred.knn), col ='blue', lwd =2)
+legend("topright", legend = c("original value", "predicted value"), fill = c('red', 'blue'))
+```
+
+## Model 11: KNN regression with spatial data
+
+```{r}
+#KNN regression
+library(caret)
+knn.spatial = knnreg(spatial_train[,-c(57:74)], spatial_train$log10CHL4)
+spatial_pred = predict(knn.spatial, spatial_train[,-c(57:74)])
+spatial_pred.knn = predict(knn.spatial, spatial_test[,-c(57:74)])
+rmse_spatial.knn = sqrt(mean((10^(spatial_pred.knn)-10^(spatial_test$log10CHL4))^2))
+R_squared.knn = (sd(spatial_pred))^2/(sd(spatial_train$log10CHL4))^2
+R_squared.knn
+adj_R.knn = 1-(1-R_squared.knn)*((nrow(spatial_train)-1)/(nrow(spatial_train)-56))
+adj_R.knn
+cat("RMSE: ", rmse_spatial.knn, "R-squared: ", R_squared.knn)
+x = 1:nrow(spatial_test)
+plot(x,10^(spatial_test$log10CHL4), col = 'red', type = 'l', lwd = 2, main = 'CHL 4 prediction', xlab = "Index", ylab = "Predicted CHL 4")
+lines(x, 10^(spatial_pred.knn), col ='blue', lwd =2)
+legend("topright", legend = c("original value", "predicted value"), fill = c('red', 'blue'))
+```
+
+## Model 12: KNN regression with temporal data
+
+```{r}
+#KNN regression
+library(caret)
+knn.temporal = knnreg(temporal_train[,-c(7:24)], temporal_train$log10CHL4)
+temporal_pred = predict(knn.temporal, temporal_train[,-c(7:24)])
+temporal_pred.knn = predict(knn.temporal, temporal_test[,-c(7:24)])
+rmse_temporal.knn = sqrt(mean((10^(temporal_pred.knn)-10^(temporal_test$log10CHL4))^2))
+R_squared.knn = (sd(temporal_pred))^2/(sd(temporal_train$log10CHL4))^2
+R_squared.knn
+adj_R.knn = 1-(1-R_squared.knn)*((nrow(temporal_train)-1)/(nrow(temporal_train)-32))
+adj_R.knn
+cat("RMSE: ", rmse_temporal.knn, "R-squared: ", R_squared.knn)
+x = 1:nrow(temporal_test)
+plot(x,10^(temporal_test$log10CHL4), col = 'red', type = 'l', lwd = 2, main = 'CHL 4 prediction', xlab = "Index", ylab = "Predicted CHL 4")
+lines(x, 10^(temporal_pred.knn), col ='blue', lwd =2)
+legend("topright", legend = c("original value", "predicted value"), fill = c('red', 'blue'))
+```
+
+## Model 13: Elastic Net regression with BATS data
+
+```{r}
+library(glmnet)
+library(caret)
+bats_train_CHL4 = bats_train[,-c(7:9,11:24)]
+elastic_net_bats = train(log10CHL4~., data = bats_train_CHL4, method = "glmnet")
+elastic_net_bats
+bats_pred.net = predict(elastic_net_bats, as.matrix(bats_test[,-c(7:24)]))
+rmse_bats.net = sqrt(mean((10^(bats_pred.net)-10^(bats_test$log10CHL4))^2))
+rmse_bats.net
+bats_pred_train = predict(elastic_net_bats, as.matrix(bats_train[,-c(7:24)]))
+R_squared.net = (sd(bats_pred_train))^2/(sd(bats_train$log10CHL4))^2
+R_squared.net
+adj_R.net = 1-(1-R_squared.net)*((nrow(bats_train)-1)/(nrow(bats_train)-8))
+adj_R.net
+plot(10^(bats_pred.net), 10^(bats_test$log10CHL4), xlab = "Predicted CHL4", ylab = "CHL 4")
+abline(a = 0, b = 1, col = "red")
+```
+
+## Model 14: Elastic Net regression with spatial data
+
+```{r}
+# Elastic Net regression
+library(glmnet)
+library(caret)
+spatial_train_CHL4 = spatial_train[,-c(57:59,61:74)]
+elastic_net_spatial = train(log10CHL4~., data = spatial_train_CHL4, method = "glmnet")
+elastic_net_spatial
+
+spatial_pred.net = predict(elastic_net_spatial, as.matrix(spatial_test[,-c(57:74)]))
+rmse_spatial.net = sqrt(mean((10^(spatial_pred.net)-10^(spatial_test$log10CHL4))^2))
+rmse_spatial.net
+spatial_pred_train = predict(elastic_net_spatial, as.matrix(spatial_train[,-c(57:74)]))
+R_squared.net = (sd(spatial_pred_train))^2/(sd(spatial_train$log10CHL4))^2
+R_squared.net
+adj_R.net = 1-(1-R_squared.net)*((nrow(spatial_train)-1)/(nrow(spatial_train)-56))
+adj_R.net
+plot(10^(spatial_pred.net), 10^(spatial_test$log10CHL4), xlab = "Predicted CHL4", ylab = "CHL 4")
+abline(a = 0, b = 1, col = "red")
+```
+
+## Model 15: Elastic Net regression with temporal data
+
+```{r}
+library(glmnet)
+library(caret)
+temporal_train_CHL4 = temporal_train[,-c(7:9,11:24)]
+elastic_net_temporal = train(log10CHL4~., data = temporal_train_CHL4, method = "glmnet")
+elastic_net_temporal
+temporal_pred.net = predict(elastic_net_temporal, as.matrix(temporal_test[,-c(7:24)]))
+rmse_temporal.net = sqrt(mean((10^(temporal_pred.net)-10^(temporal_test$log10CHL4))^2))
+rmse_temporal.net
+temporal_pred_train = predict(elastic_net_temporal, as.matrix(temporal_train[,-c(7:24)]))
+R_squared.net = (sd(temporal_pred_train))^2/(sd(temporal_train$log10CHL4))^2
+R_squared.net
+adj_R.net = 1-(1-R_squared.net)*((nrow(temporal_train)-1)/(nrow(temporal_train)-32))
+adj_R.net
+plot(10^(temporal_pred.net), 10^(temporal_test$log10CHL4), xlab = "Predicted CHL4", ylab = "CHL 4")
+abline(a = 0, b = 1, col = "red")
+```
+
+## Use model 2, 8, 13, 15 to predict on the validation set to assess the stability of each model
+
+```{r}
+# Model 2: Lasso regression on BATS data
+bats_pred.lasso.valid = predict(lasso.bats, as.matrix(bats_valid[,-c(7:24)]))
+rmse_bats.lasso.valid = sqrt(mean((10^(bats_pred.lasso.valid)-10^(bats_valid$log10CHL4))^2))
+rmse_bats.lasso.valid
+
+# Model 8: Lasso regression on temporal data
+temporal_pred.lasso.valid = predict(lasso.temporal, as.matrix(temporal_valid[,-c(7:24)]))
+rmse_temporal.lasso.valid = sqrt(mean((10^(temporal_pred.lasso.valid)-10^(temporal_valid$log10CHL4))^2))
+rmse_temporal.lasso.valid
+
+# Elastic Net regression on BATS data
+bats_pred.net.valid = predict(elastic_net_bats, as.matrix(bats_valid[,-c(7:24)]))
+rmse_bats.net.valid = sqrt(mean((10^(bats_pred.net.valid)-10^(bats_valid$log10CHL4))^2))
+rmse_bats.net.valid
+
+# Elastic Net regression on temporal data
+temporal_pred.net.valid = predict(elastic_net_temporal, as.matrix(temporal_valid[,-c(7:24)]))
+rmse_temporal.net.valid = sqrt(mean((10^(temporal_pred.net.valid)-10^(temporal_valid$log10CHL4))^2))
+rmse_temporal.net.valid
+```
+
+## Use model 8 and 15 to predict all the CHL in all depths
+
+### use Model 8 to predict all depths and draw plot for distribution of CHL in year 1994
+
+```{r}
+table_rmse = data.frame(matrix(data = NA, nrow = 17, ncol = 2))
+table_prediction_8 = data.frame(matrix(data = NA, nrow = 1173, ncol = 1))
+colnames(table_rmse) <- c("No.Depths", "RMSE of Lasso on temporal data")
+table_rmse$No.Depths <- seq(2,18,1)
+colnames(table_prediction_8) <- c("No.")
+
+# Lasso with temporal data
+for (i in 8:24) {
+  X = as.matrix(temporal_data[,-c(7:24)])
+  Y = as.matrix(temporal_data[,i])
+  lasso.mod = cv.glmnet(X, Y, alpha = 1, lambda = seq(0, 10, 0.01), nfolds = 10)
+  lambda.lasso = lasso.mod$lambda.min
+  lasso.temporal = glmnet(X, Y, alpha = 1, lambda = lambda.lasso)
+  # Predict and compute MRSE
+  temporal_pred.lasso = predict(lasso.temporal, as.matrix(temporal_data[,-c(7:24)]))
+  CHL_pred.lasso = 10^(temporal_pred.lasso)
+  table_prediction_8 = cbind(table_prediction_8, CHL_pred.lasso)
+  j = i-6
+  colnames(table_prediction_8)[j] = paste("predict_depths", j) 
+  rmse_temporal.lasso = sqrt(mean((10^(temporal_pred.lasso)-10^(temporal_data[,i]))^2))
+  table_rmse[i-7,2] = rmse_temporal.lasso
+}
+table_prediction_8 = table_prediction_8[,-c(1)]
+table_prediction_8 = cbind(table_prediction_8, temporal_data$year)
+table_rmse # view table with RMSE of all depths
+```
+
+```{r}
+# Draw CHL distribtion plot 
+library(lattice)
+library(raster)
+library(rasterVis)
+obs = as.matrix(c(1:69))
+dp = as.matrix(c(1:17))
+table_prediction_8.year = table_prediction_8[table_prediction_8$`temporal_data$year` == 1994,]
+table_prediction_8.year = table_prediction_8.year[,c(17:1)]
+col.l = colorRampPalette(c('red', 'orange', 'yellow', 'green', 'cyan', 'blue'))
+#col.l = colorRampPalette(c('blue','cyan','yellow','orange','red'))
+levelplot(as.matrix(table_prediction_8.year[,-c(18)]),row.values = obs, column.values = dp, col.regions = col.l, xlim = c(1:69), xlab = "Observation predicted", ylab = "Depths", main = "Distribution of CHL")
+```
+
+### Model 15: Elastic Net regression with temporal data
+
+```{r}
+table_rmse = data.frame(matrix(data = NA, nrow = 17, ncol = 2))
+table_prediction_15 = data.frame(matrix(data = NA, nrow = 1173, ncol = 1))
+colnames(table_rmse) <- c("No.Depths", "RMSE of Elastic Net with temporal data")
+table_rmse$No.Depths <- seq(2,18,1)
+colnames(table_prediction_15) <- c("No.")
+
+# Elastic Net with temporal data
+for (i in 8:24) {
+  X = as.matrix(temporal_data[,-c(7:24)])
+  Y = temporal_data[,i]
+  elastic_net_temporal = train(X, Y, method = "glmnet")
+  temporal_pred.net = predict(elastic_net_temporal, as.matrix(temporal_data[,-c(7:24)]))
+  CHL_pred.net = 10^(temporal_pred.net)
+  table_prediction_15 = cbind(table_prediction_15, CHL_pred.net)
+  j = i-6
+  colnames(table_prediction_15)[j] = paste("predict_depths", j) 
+  rmse_temporal.net = sqrt(mean((10^(temporal_pred.net)-10^(temporal_data[,i]))^2))
+  table_rmse[i-7,2] = rmse_temporal.net
+}
+table_prediction_15 = table_prediction_15[,-c(1)]
+table_prediction_15 = cbind(table_prediction_15, temporal_data$year)
+table_rmse # view table with RMSE of all depths
+```
+
+```{r}
+# Draw CHL distribtion plot
+library(lattice)
+library(raster)
+library(rasterVis)
+obs = as.matrix(c(1:69))
+dp = as.matrix(c(1:17))
+table_prediction_15.year = table_prediction_15[table_prediction_15$`temporal_data$year` == 1994,]
+table_prediction_15.year = table_prediction_15.year[,c(17:1)]
+col.l = colorRampPalette(c('red', 'orange', 'yellow', 'green', 'cyan', 'blue'))
+#col.l = colorRampPalette(c('blue','cyan','yellow','orange','red'))
+levelplot(as.matrix(table_prediction_15.year[,-c(18)]),row.values = obs, column.values = dp, col.regions = col.l, xlim = c(1:69), xlab = "Observation predicted", ylab = "Depths", main = "Distribution of CHL")
+```
